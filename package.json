@@ -51,7 +51,7 @@
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.17"
   },
-  "homepage": "https://yourusername.github.io/ai-resume-tailoring-tool",
+  "homepage": ".",
   "keywords": [
     "resume",
     "ai",
