@@ -92,22 +92,49 @@ const ResumeOutput = ({ resume, analysisResults, onDownload }) => {
               const testLine = currentLine + (currentLine ? ' ' : '') + words[i];
               const testWidth = pdf.getTextWidth(testLine);
               
-              if (testWidth > contentWidth - 5) { // Account for bullet indent
-                // Current line is full, write it and start new line
-                if (currentLine) {
-                  pdf.text(currentLine, xOffset, currentY);
-                  currentY += 4;
-                  xOffset = margin + 5; // Maintain bullet indent
-                  
-                  // Check if we need a new page
-                  if (currentY > pageHeight - margin) {
-                    pdf.addPage();
-                    currentY = margin;
+              // Prevent breaking on hyphens - if word contains hyphen, treat as one unit
+              const word = words[i];
+              if (word.includes('-') && word.length > 1) {
+                // For hyphenated words, check if the whole word fits
+                const fullWordTest = currentLine + (currentLine ? ' ' : '') + word;
+                const fullWordWidth = pdf.getTextWidth(fullWordTest);
+                
+                if (fullWordWidth > contentWidth - 5) {
+                  // Word doesn't fit, start new line
+                  if (currentLine) {
+                    pdf.text(currentLine, xOffset, currentY);
+                    currentY += 4;
+                    xOffset = margin + 5; // Maintain bullet indent
+                    
+                    // Check if we need a new page
+                    if (currentY > pageHeight - margin) {
+                      pdf.addPage();
+                      currentY = margin;
+                    }
                   }
+                  currentLine = word;
+                } else {
+                  currentLine = fullWordTest;
                 }
-                currentLine = words[i];
               } else {
-                currentLine = testLine;
+                // Regular word handling
+                if (testWidth > contentWidth - 5) { // Account for bullet indent
+                  // Current line is full, write it and start new line
+                  if (currentLine) {
+                    pdf.text(currentLine, xOffset, currentY);
+                    currentY += 4;
+                    xOffset = margin + 5; // Maintain bullet indent
+                    
+                    // Check if we need a new page
+                    if (currentY > pageHeight - margin) {
+                      pdf.addPage();
+                      currentY = margin;
+                    }
+                  }
+                  currentLine = words[i];
+                } else {
+                  currentLine = testLine;
+                }
               }
             }
             
@@ -141,22 +168,49 @@ const ResumeOutput = ({ resume, analysisResults, onDownload }) => {
               const testLine = currentLine + (currentLine ? ' ' : '') + words[i];
               const testWidth = pdf.getTextWidth(testLine);
               
-              if (testWidth > contentWidth) {
-                // Current line is full, write it and start new line
-                if (currentLine) {
-                  pdf.text(currentLine, xOffset, currentY);
-                  currentY += 4;
-                  xOffset = margin;
-                  
-                  // Check if we need a new page
-                  if (currentY > pageHeight - margin) {
-                    pdf.addPage();
-                    currentY = margin;
+              // Prevent breaking on hyphens - if word contains hyphen, treat as one unit
+              const word = words[i];
+              if (word.includes('-') && word.length > 1) {
+                // For hyphenated words, check if the whole word fits
+                const fullWordTest = currentLine + (currentLine ? ' ' : '') + word;
+                const fullWordWidth = pdf.getTextWidth(fullWordTest);
+                
+                if (fullWordWidth > contentWidth) {
+                  // Word doesn't fit, start new line
+                  if (currentLine) {
+                    pdf.text(currentLine, xOffset, currentY);
+                    currentY += 4;
+                    xOffset = margin;
+                    
+                    // Check if we need a new page
+                    if (currentY > pageHeight - margin) {
+                      pdf.addPage();
+                      currentY = margin;
+                    }
                   }
+                  currentLine = word;
+                } else {
+                  currentLine = fullWordTest;
                 }
-                currentLine = words[i];
               } else {
-                currentLine = testLine;
+                // Regular word handling
+                if (testWidth > contentWidth) {
+                  // Current line is full, write it and start new line
+                  if (currentLine) {
+                    pdf.text(currentLine, xOffset, currentY);
+                    currentY += 4;
+                    xOffset = margin;
+                    
+                    // Check if we need a new page
+                    if (currentY > pageHeight - margin) {
+                      pdf.addPage();
+                      currentY = margin;
+                    }
+                  }
+                  currentLine = words[i];
+                } else {
+                  currentLine = testLine;
+                }
               }
             }
             
@@ -472,6 +526,26 @@ const ResumeOutput = ({ resume, analysisResults, onDownload }) => {
             margin: '0 auto'
           }}
         >
+          <style>
+            {`
+              .resume-content {
+                word-break: keep-all;
+                overflow-wrap: normal;
+                hyphens: none;
+                -webkit-hyphens: none;
+                -moz-hyphens: none;
+                -ms-hyphens: none;
+              }
+              .resume-content h2, .resume-content h3, .resume-content h4, .resume-content p, .resume-content li {
+                word-break: keep-all;
+                overflow-wrap: normal;
+                hyphens: none;
+                -webkit-hyphens: none;
+                -moz-hyphens: none;
+                -ms-hyphens: none;
+              }
+            `}
+          </style>
           <div 
             dangerouslySetInnerHTML={{ 
               __html: formatResumeContent(resume) 
@@ -480,7 +554,13 @@ const ResumeOutput = ({ resume, analysisResults, onDownload }) => {
             style={{
               fontSize: '10px',
               lineHeight: '1.3',
-              fontFamily: 'Times New Roman, serif'
+              fontFamily: 'Times New Roman, serif',
+              wordBreak: 'keep-all',
+              overflowWrap: 'normal',
+              hyphens: 'none',
+              WebkitHyphens: 'none',
+              MozHyphens: 'none',
+              msHyphens: 'none'
             }}
           />
         </div>

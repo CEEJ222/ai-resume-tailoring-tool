@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Upload, FileText, Download, Zap, Target, Award, Users, Settings, Database, BookOpen, User, Briefcase, FileImage, Trash2, Edit, Plus, TrendingUp, CheckCircle, AlertCircle, BarChart3, AlertTriangle, LogOut } from 'lucide-react';
 import './App.css';
-import useSupabaseFileUpload from './hooks/useSupabaseFileUpload';
 import { supabase } from './lib/supabase';
-import DragDropUpload from './components/DragDropUpload';
 import Auth from './components/Auth';
 import CompanySearch from './components/CompanySearch';
 import ResumeOutput from './components/ResumeOutput';
+import EnhancedProfileBuilder from './components/EnhancedProfileBuilder';
 
 const App = () => {
   const [user, setUser] = useState(null);
@@ -17,23 +16,18 @@ const App = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [analysisResults, setAnalysisResults] = useState(null);
   
-  // Use custom file upload hook
-  const {
-    uploadedFiles,
-    isUploading,
-    uploadError,
-    isLoading,
-    fileTypes,
-    handleFileUpload,
-    removeFile,
-    getFilesByType,
-    getUploadStats,
-    clearError,
-    addFileManually,
-    loadFiles
-  } = useSupabaseFileUpload();
+
   
   const [skills, setSkills] = useState([]);
+  const [skillProfile, setSkillProfile] = useState({
+    technical: ['React', 'HTML/CSS/JS', 'SQL', 'API Integration', 'Mobile Development', 'Oracle ARCS'],
+    product: ['Product Strategy', 'Roadmapping', 'A/B Testing', 'User Research', 'Agile/Scrum'],
+    leadership: ['Cross-functional Teams', 'Vendor Management', 'Stakeholder Alignment', 'P&L Ownership'],
+    domain: ['SaaS', 'eCommerce', 'Healthcare', 'Telecom', 'Compliance', 'Mobile Apps']
+  });
+  const [skillProfileLoading, setSkillProfileLoading] = useState(false);
+  const [experiences, setExperiences] = useState([]);
+  const [experiencesLoading, setExperiencesLoading] = useState(false);
 
   // NEW: Application Tracking for JTBD "Maintain consistency across applications"
   const [applications, setApplications] = useState([
@@ -147,6 +141,14 @@ const App = () => {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Load skill profile when user changes
+  useEffect(() => {
+    if (user) {
+      loadSkillProfile();
+      loadExperiences();
+    }
+  }, [user]);
+
   const handleSignOut = async () => {
     const { error } = await supabase.auth.signOut();
     if (!error) {
@@ -206,6 +208,124 @@ const App = () => {
     }));
   };
 
+  // Skill Management Functions
+  const addSkill = (category, skill) => {
+    setSkillProfile(prev => {
+      const newProfile = {
+        ...prev,
+        [category]: [...prev[category], skill]
+      };
+      saveSkillProfile(newProfile);
+      return newProfile;
+    });
+  };
+
+  const removeSkill = (category, skill) => {
+    setSkillProfile(prev => {
+      const newProfile = {
+        ...prev,
+        [category]: prev[category].filter(s => s !== skill)
+      };
+      saveSkillProfile(newProfile);
+      return newProfile;
+    });
+  };
+
+  const toggleSkill = (category, skill) => {
+    if (skillProfile[category].includes(skill)) {
+      removeSkill(category, skill);
+    } else {
+      addSkill(category, skill);
+    }
+  };
+
+  // Load skill profile from Supabase
+  const loadSkillProfile = async () => {
+    if (!user || !supabase) return;
+    
+    try {
+      setSkillProfileLoading(true);
+      const { data, error } = await supabase
+        .from('skill_profiles')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+        console.error('Error loading skill profile:', error);
+        return;
+      }
+
+      if (data && data.skills) {
+        setSkillProfile(data.skills);
+      }
+    } catch (error) {
+      console.error('Error loading skill profile:', error);
+    } finally {
+      setSkillProfileLoading(false);
+    }
+  };
+
+  // Save skill profile to Supabase
+  const saveSkillProfile = async (newProfile) => {
+    if (!user || !supabase) return;
+    
+    try {
+      const { error } = await supabase
+        .from('skill_profiles')
+        .upsert({
+          user_id: user.id,
+          skills: newProfile,
+          updated_at: new Date().toISOString()
+        });
+
+      if (error) {
+        console.error('Error saving skill profile:', error);
+      }
+    } catch (error) {
+      console.error('Error saving skill profile:', error);
+    }
+  };
+
+  // Load experiences from Supabase
+  const loadExperiences = async () => {
+    if (!user || !supabase) return;
+    
+    try {
+      setExperiencesLoading(true);
+      const { data, error } = await supabase
+        .from('experiences')
+        .select(`
+          *,
+          accomplishments (
+            id,
+            description,
+            impact,
+            date,
+            category,
+            tags
+          )
+        `)
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error loading experiences:', error);
+        return;
+      }
+
+      const experiencesWithAchievements = (data || []).map(experience => ({
+        ...experience,
+        achievements: experience.accomplishments?.map(acc => acc.description) || []
+      }));
+
+      setExperiences(experiencesWithAchievements);
+    } catch (error) {
+      console.error('Error loading experiences:', error);
+    } finally {
+      setExperiencesLoading(false);
+    }
+  };
 
 
   // Removed manual experience management functions
@@ -213,7 +333,7 @@ const App = () => {
   // Navigation tabs
   const tabs = [
     { id: 'generate', label: 'Generate Resume', icon: Zap },
-    { id: 'profile', label: 'Profile Builder', icon: User },
+    { id: 'profile', label: 'Enhanced Profile', icon: User },
     { id: 'tracking', label: 'Application Tracking', icon: BarChart3 },
     { id: 'analytics', label: 'Performance Analytics', icon: TrendingUp }
   ];
@@ -295,8 +415,77 @@ const App = () => {
   };
 
   const analyzeJobDescription = (jd) => {
-    // Simulate AI analysis
     const keywords = jd.toLowerCase();
+    
+    // Extract all skills from experiences
+    const allExperienceSkills = [];
+    experiences.forEach(experience => {
+      if (experience.skills_with_evidence) {
+        experience.skills_with_evidence.forEach(skillData => {
+          allExperienceSkills.push(skillData.skill);
+        });
+      }
+    });
+
+    // Categorize skills from experiences
+    const experienceSkillsByCategory = {
+      technical: [],
+      product: [],
+      leadership: [],
+      domain: []
+    };
+
+    // Helper function to categorize a skill
+    const categorizeSkill = (skillName) => {
+      const skillLower = skillName.toLowerCase();
+      
+      // Technical skills
+      if (skillLower.includes('react') || skillLower.includes('javascript') || skillLower.includes('api') || 
+          skillLower.includes('mobile') || skillLower.includes('development') || skillLower.includes('sql') ||
+          skillLower.includes('oracle') || skillLower.includes('integration')) {
+        return 'technical';
+      }
+      
+      // Product skills
+      if (skillLower.includes('product') || skillLower.includes('strategy') || skillLower.includes('roadmap') ||
+          skillLower.includes('testing') || skillLower.includes('research') || skillLower.includes('agile') ||
+          skillLower.includes('analytics') || skillLower.includes('discovery')) {
+        return 'product';
+      }
+      
+      // Leadership skills
+      if (skillLower.includes('lead') || skillLower.includes('manage') || skillLower.includes('team') ||
+          skillLower.includes('stakeholder') || skillLower.includes('vendor') || skillLower.includes('cross') ||
+          skillLower.includes('strategic') || skillLower.includes('budget') || skillLower.includes('p&l')) {
+        return 'leadership';
+      }
+      
+      // Domain skills
+      if (skillLower.includes('healthcare') || skillLower.includes('medical') || skillLower.includes('compliance') ||
+          skillLower.includes('saas') || skillLower.includes('ecommerce') || skillLower.includes('mobile') ||
+          skillLower.includes('fintech') || skillLower.includes('telecom')) {
+        return 'domain';
+      }
+      
+      return 'product'; // Default to product
+    };
+
+    // Categorize all experience skills
+    allExperienceSkills.forEach(skill => {
+      const category = categorizeSkill(skill);
+      if (!experienceSkillsByCategory[category].includes(skill)) {
+        experienceSkillsByCategory[category].push(skill);
+      }
+    });
+
+    // Merge with skill profile (prioritize experience skills)
+    const candidateSkills = {
+      technical: [...new Set([...experienceSkillsByCategory.technical, ...(skillProfile.technical || [])])],
+      product: [...new Set([...experienceSkillsByCategory.product, ...(skillProfile.product || [])])],
+      leadership: [...new Set([...experienceSkillsByCategory.leadership, ...(skillProfile.leadership || [])])],
+      domain: [...new Set([...experienceSkillsByCategory.domain, ...(skillProfile.domain || [])])]
+    };
+
     const analysis = {
       role: keywords.includes('senior') ? 'Senior' : keywords.includes('director') ? 'Director' : 'Product Manager',
       industry: keywords.includes('healthcare') ? 'Healthcare' : 
@@ -304,29 +493,202 @@ const App = () => {
                 keywords.includes('e-commerce') ? 'eCommerce' : 
                 keywords.includes('saas') ? 'SaaS' : 'Technology',
       keyRequirements: [],
+      requiredSkills: {
+        technical: [],
+        product: [],
+        leadership: [],
+        domain: []
+      },
+      candidateSkills: candidateSkills,
+      skillGaps: {
+        technical: [],
+        product: [],
+        leadership: [],
+        domain: []
+      },
       matchScore: 0,
-      recommendedFocus: []
+      recommendedFocus: [],
+      experienceAlignment: [],
+      improvementAreas: [],
+      relevantExperiences: []
     };
 
-    // Extract requirements
+    // Extract required skills from job description
+    const technicalKeywords = {
+      'React': ['react', 'frontend', 'javascript', 'js', 'web development'],
+      'Mobile Development': ['mobile', 'ios', 'android', 'app development', 'react native'],
+      'API Integration': ['api', 'rest', 'graphql', 'integration', 'microservices'],
+      'Data Analysis': ['data', 'analytics', 'sql', 'python', 'r', 'machine learning', 'ml', 'ai'],
+      'Cloud Platforms': ['aws', 'azure', 'gcp', 'cloud', 'docker', 'kubernetes'],
+      'DevOps': ['devops', 'ci/cd', 'jenkins', 'git', 'deployment'],
+      'Database': ['database', 'mysql', 'postgresql', 'mongodb', 'nosql'],
+      'Security': ['security', 'authentication', 'authorization', 'oauth', 'jwt']
+    };
+
+    const productKeywords = {
+      'Product Strategy': ['strategy', 'roadmap', 'vision', 'product vision'],
+      'User Research': ['user research', 'ux research', 'user testing', 'usability'],
+      'A/B Testing': ['a/b testing', 'experimentation', 'optimization', 'conversion'],
+      'Analytics': ['analytics', 'metrics', 'kpis', 'dashboard', 'reporting'],
+      'Agile/Scrum': ['agile', 'scrum', 'sprint', 'kanban', 'lean'],
+      'Product Discovery': ['discovery', 'ideation', 'validation', 'mvp'],
+      'Go-to-Market': ['gtm', 'go to market', 'launch', 'marketing'],
+      'Competitive Analysis': ['competitive', 'market research', 'benchmarking']
+    };
+
+    const leadershipKeywords = {
+      'Team Leadership': ['lead', 'manage', 'team', 'mentor', 'coach'],
+      'Stakeholder Management': ['stakeholder', 'executive', 'c-level', 'board'],
+      'Cross-functional Collaboration': ['cross-functional', 'collaboration', 'partnership'],
+      'Strategic Planning': ['strategic', 'planning', 'vision', 'long-term'],
+      'Change Management': ['change management', 'transformation', 'organizational'],
+      'Budget Management': ['budget', 'p&l', 'financial', 'roi', 'cost'],
+      'Vendor Management': ['vendor', 'partner', 'third-party', 'outsourcing'],
+      'Crisis Management': ['crisis', 'risk', 'mitigation', 'problem-solving']
+    };
+
+    const domainKeywords = {
+      'Healthcare': ['healthcare', 'medical', 'hipaa', 'fda', 'clinical', 'patient'],
+      'FinTech': ['fintech', 'financial', 'banking', 'payments', 'compliance', 'regulatory'],
+      'eCommerce': ['ecommerce', 'retail', 'shopping', 'marketplace', 'inventory'],
+      'SaaS': ['saas', 'software', 'subscription', 'recurring revenue', 'enterprise'],
+      'Mobile Apps': ['mobile', 'app store', 'ios', 'android', 'native'],
+      'AI/ML': ['ai', 'machine learning', 'ml', 'artificial intelligence', 'nlp'],
+      'Cybersecurity': ['security', 'cybersecurity', 'threat', 'vulnerability'],
+      'IoT': ['iot', 'internet of things', 'connected devices', 'sensors']
+    };
+
+    // Analyze required skills
+    Object.entries(technicalKeywords).forEach(([skill, keywords]) => {
+      if (keywords.some(keyword => jd.includes(keyword))) {
+        analysis.requiredSkills.technical.push(skill);
+        if (!candidateSkills.technical.includes(skill)) {
+          analysis.skillGaps.technical.push(skill);
+        }
+      }
+    });
+
+    Object.entries(productKeywords).forEach(([skill, keywords]) => {
+      if (keywords.some(keyword => jd.includes(keyword))) {
+        analysis.requiredSkills.product.push(skill);
+        if (!candidateSkills.product.includes(skill)) {
+          analysis.skillGaps.product.push(skill);
+        }
+      }
+    });
+
+    Object.entries(leadershipKeywords).forEach(([skill, keywords]) => {
+      if (keywords.some(keyword => jd.includes(keyword))) {
+        analysis.requiredSkills.leadership.push(skill);
+        if (!candidateSkills.leadership.includes(skill)) {
+          analysis.skillGaps.leadership.push(skill);
+        }
+      }
+    });
+
+    Object.entries(domainKeywords).forEach(([skill, keywords]) => {
+      if (keywords.some(keyword => jd.includes(keyword))) {
+        analysis.requiredSkills.domain.push(skill);
+        if (!candidateSkills.domain.includes(skill)) {
+          analysis.skillGaps.domain.push(skill);
+        }
+      }
+    });
+
+    // Extract key requirements
     if (keywords.includes('mobile')) analysis.keyRequirements.push('Mobile Product Management');
     if (keywords.includes('api')) analysis.keyRequirements.push('API Integration');
     if (keywords.includes('growth')) analysis.keyRequirements.push('Growth/Revenue');
     if (keywords.includes('compliance')) analysis.keyRequirements.push('Regulatory Compliance');
     if (keywords.includes('data')) analysis.keyRequirements.push('Data-Driven Decision Making');
+    if (keywords.includes('team')) analysis.keyRequirements.push('Team Leadership');
+    if (keywords.includes('stakeholder')) analysis.keyRequirements.push('Stakeholder Management');
+    if (keywords.includes('strategy')) analysis.keyRequirements.push('Strategic Planning');
+
+    // Find relevant experiences based on job requirements
+    experiences.forEach(experience => {
+      let relevanceScore = 0;
+      const experienceText = `${experience.company} ${experience.role} ${experience.achievements.join(' ')}`.toLowerCase();
+      
+      // Check for industry match
+      if (analysis.industry === 'Healthcare' && experienceText.includes('healthcare')) relevanceScore += 3;
+      if (analysis.industry === 'FinTech' && experienceText.includes('financial')) relevanceScore += 3;
+      if (analysis.industry === 'eCommerce' && experienceText.includes('ecommerce')) relevanceScore += 3;
+      if (analysis.industry === 'SaaS' && experienceText.includes('saas')) relevanceScore += 3;
+      
+      // Check for skill matches
+      analysis.requiredSkills.technical.forEach(skill => {
+        if (experienceText.includes(skill.toLowerCase())) relevanceScore += 2;
+      });
+      analysis.requiredSkills.product.forEach(skill => {
+        if (experienceText.includes(skill.toLowerCase())) relevanceScore += 2;
+      });
+      analysis.requiredSkills.leadership.forEach(skill => {
+        if (experienceText.includes(skill.toLowerCase())) relevanceScore += 2;
+      });
+      analysis.requiredSkills.domain.forEach(skill => {
+        if (experienceText.includes(skill.toLowerCase())) relevanceScore += 2;
+      });
+      
+      // Check for key requirement matches
+      analysis.keyRequirements.forEach(req => {
+        if (experienceText.includes(req.toLowerCase())) relevanceScore += 1;
+      });
+      
+      if (relevanceScore > 0) {
+        analysis.relevantExperiences.push({
+          ...experience,
+          relevanceScore
+        });
+      }
+    });
+
+    // Sort experiences by relevance
+    analysis.relevantExperiences.sort((a, b) => b.relevanceScore - a.relevanceScore);
+
+    // Generate experience alignment based on real experiences
+    analysis.relevantExperiences.slice(0, 3).forEach(exp => {
+      analysis.experienceAlignment.push(`${exp.company} - ${exp.role} (${exp.period})`);
+    });
 
     // Calculate match score
-    analysis.matchScore = Math.min(95, 70 + (analysis.keyRequirements.length * 5));
+    const totalRequiredSkills = [
+      ...analysis.requiredSkills.technical,
+      ...analysis.requiredSkills.product,
+      ...analysis.requiredSkills.leadership,
+      ...analysis.requiredSkills.domain
+    ].length;
 
-    // Recommendations
+    const matchedSkills = totalRequiredSkills - [
+      ...analysis.skillGaps.technical,
+      ...analysis.skillGaps.product,
+      ...analysis.skillGaps.leadership,
+      ...analysis.skillGaps.domain
+    ].length;
+
+    analysis.matchScore = totalRequiredSkills > 0 ? Math.min(95, Math.round((matchedSkills / totalRequiredSkills) * 100)) : 70;
+
+    // Generate recommendations based on real experiences
+    if (analysis.relevantExperiences.length > 0) {
+      const topExperience = analysis.relevantExperiences[0];
+      analysis.recommendedFocus.push(`Lead with ${topExperience.company} experience`);
+      
+      if (topExperience.achievements && topExperience.achievements.length > 0) {
+        analysis.recommendedFocus.push(`Highlight key achievements from ${topExperience.company}`);
+      }
+    }
+
     if (analysis.industry === 'Healthcare') {
-      analysis.recommendedFocus.push('Highlight Scorpion healthcare projects and TransMD');
+      analysis.recommendedFocus.push('Emphasize healthcare domain expertise');
     }
     if (keywords.includes('mobile')) {
-      analysis.recommendedFocus.push('Emphasize TruConnect mobile app leadership');
+      analysis.recommendedFocus.push('Focus on mobile product experience');
     }
     if (keywords.includes('revenue') || keywords.includes('growth')) {
-      analysis.recommendedFocus.push('Lead with 250% revenue growth achievement');
+      analysis.recommendedFocus.push('Highlight revenue and growth achievements');
+    }
+    if (keywords.includes('team') || keywords.includes('lead')) {
+      analysis.recommendedFocus.push('Emphasize leadership and team management');
     }
 
     return analysis;
@@ -341,7 +703,7 @@ const App = () => {
     const analysis = analyzeJobDescription(jobDescription);
     setAnalysisResults(analysis);
 
-    // Generate tailored resume content with improved formatting
+    // Generate tailored resume content using real experiences
     const resume = `**C.J. BRITZ**
 Director of Product Management
 Los Angeles, CA | 805.428.7721 | britzchrisj@gmail.com
@@ -355,60 +717,51 @@ ${analysis.industry === 'Healthcare' ?
 
 **PROFESSIONAL EXPERIENCE**
 
-**TruConnect** | Los Angeles, CA
+${analysis.relevantExperiences.length > 0 ? 
+  analysis.relevantExperiences.map(experience => {
+    const achievements = experience.achievements && experience.achievements.length > 0 
+      ? experience.achievements.slice(0, 4).map(achievement => `• ${achievement}`).join('\n')
+      : `• **${experience.role}** at ${experience.company} during ${experience.period}`;
+    
+    return `**${experience.company}** | Los Angeles, CA
+**${experience.role}** | ${experience.period}
+${achievements}`;
+  }).join('\n\n') :
+  // Fallback to hardcoded experiences if no relevant ones found
+  `**TruConnect** | Los Angeles, CA
 **Director of Product Management** | January 2025 - Present
-${analysis.keyRequirements.includes('Mobile Product Management') ? 
-  '• **Leading mobile app** with millions of downloads across iOS/Android platforms\n• **Redesigned recurring payments** and achieved CA auto renewal law compliance\n• **Rebuilt app architecture** using React for improved scalability and performance\n• **Managing cross-functional teams** of 15+ engineers, designers, and product managers' :
-  '• **Promoted to Director** overseeing product strategy for telecom platform\n• **Led compliance initiatives** ensuring regulatory adherence across all products\n• **Managing P&L** for $2.4MM annualized profit portfolio\n• **Overseeing product roadmap** for 1.7M+ user platform'
-}
+• **Leading mobile app** with millions of downloads across iOS/Android platforms
+• **Redesigned recurring payments** and achieved CA auto renewal law compliance
+• **Managing cross-functional teams** of 15+ engineers, designers, and product managers
 
-**Senior Product Manager** | January 2023 - January 2025
-• **Delivered 250% revenue growth** ($2.4MM annualized profit) through strategic product repositioning
-• **Grew user base from 900k to 1.7MM** through enhanced digital experience and feature optimization
-• **Reduced churn by 9%** via strategic partnership integration (Amazon Prime) for 100k+ user cohort
-• **Improved customer satisfaction by 15%** through AI-driven feedback loops and rapid iteration
-
-${analysis.industry === 'Healthcare' || analysis.keyRequirements.includes('Regulatory Compliance') ?
-`**Scorpion** | Los Angeles, CA
-**Product Manager** | December 2018 - January 2023
-• **Led 0-1 SaaS CRM development** for healthcare and regulated industry clients
-• **Managed $1MM+ ARR projects** for multi-state health systems and telehealth startups
-• **Implemented HIPAA compliance** across all digital touchpoints and patient data workflows
-• **Won Gold Award** for Best Overall Internet Site (eHealthcare Awards 2020)
-• **Negotiated payment processing contracts** with Stripe and other providers` :
-`**Scorpion** | Los Angeles, CA  
+**Scorpion** | Los Angeles, CA
 **Product Manager** | December 2018 - January 2023
 • **Built 0-1 SaaS CRM platform** from conception to launch for SMB market
-• **Negotiated revenue share contracts** with payment processors including Stripe partnership
 • **Delivered $1MM+ ARR projects** managing full product lifecycle for enterprise clients
-• **Won Gold Award** for Best Overall Internet Site (eHealthcare Awards 2020)
 • **Led cross-functional teams** of 8+ developers, designers, and stakeholders`
-}
-
-${analysis.industry === 'Healthcare' ? 
-`**TransMD** | Personal Project
-**Founder & Lead Developer** | December 2024 - Present
-• **Designed and built React-based healthcare navigation app** for underserved communities
-• **Implemented accessibility-first design** ensuring WCAG compliance and inclusive user experience
-• **Conducted user research** to validate product-market fit and iterate on core features
-• **Managed full-stack development** including React frontend and API integration` : ''
 }
 
 **EDUCATION**
 Bachelor of Arts in Political Science | Loyola Marymount University | 2017 | Cum Laude (GPA: 3.6)
 
-**TECHNICAL SKILLS**
-${analysis.keyRequirements.includes('Mobile Product Management') ? '• Mobile Product Strategy & Development (iOS/Android)' : ''}
-${analysis.keyRequirements.includes('API Integration') ? '• API Integration & Platform Architecture' : ''}
-${analysis.keyRequirements.includes('Growth/Revenue') ? '• Revenue Growth & Monetization Strategy' : ''}
-${analysis.keyRequirements.includes('Regulatory Compliance') ? '• Regulatory Compliance (HIPAA, PCI, CA Auto Renewal)' : ''}
-• Product Roadmapping & Strategy • Cross-functional Team Leadership • Data-Driven Decision Making
-• React Development • SQL & Data Analysis • Agile/Scrum Methodologies • A/B Testing & Optimization`;
+**RELEVANT SKILLS**
+${Object.entries(analysis.candidateSkills).map(([category, skills]) => {
+  if (skills.length > 0) {
+    return `${category.charAt(0).toUpperCase() + category.slice(1)}: ${skills.slice(0, 5).join(' \u00A0•\u00A0 ')}`;
+  }
+  return '';
+}).filter(Boolean).join('\n')}
+
+**KEY ACHIEVEMENTS**
+${analysis.relevantExperiences.length > 0 && analysis.relevantExperiences[0].achievements ? 
+  analysis.relevantExperiences[0].achievements.slice(0, 3).map(achievement => `• ${achievement}`).join('\n') :
+  '• Led 250% revenue growth through strategic product repositioning\n• Grew user base from 900k to 1.7MM through enhanced digital experience\n• Reduced churn by 9% via strategic partnership integration'
+}`;
 
     setGeneratedResume(resume);
     setIsGenerating(false);
 
-    // NEW: Auto-track this application for JTBD "Maintain consistency across applications"
+    // Auto-track this application
     const newApplication = {
       id: Date.now(),
       company: analysis.industry === 'Healthcare' ? 'Healthcare Company' : 'Technology Company',
@@ -426,132 +779,7 @@ ${analysis.keyRequirements.includes('Regulatory Compliance') ? '• Regulatory C
 
 
   const renderProfileBuilder = () => (
-    <div className="space-y-8">
-      <div className="text-center mb-8">
-        <h2 className="text-2xl font-bold text-gray-800 mb-2">Profile Builder</h2>
-        <p className="text-gray-600">Upload your documents and build your professional profile for AI-powered resume generation</p>
-      </div>
-
-      {/* Error Display */}
-      {uploadError && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-          <div className="flex items-center space-x-2">
-            <AlertTriangle className="w-5 h-5 text-red-600" />
-            <span className="text-red-800 font-medium">Upload Error</span>
-          </div>
-          <p className="text-red-700 mt-1">{uploadError}</p>
-          <button 
-            onClick={clearError}
-            className="text-red-600 hover:text-red-800 text-sm mt-2"
-          >
-            Dismiss
-          </button>
-        </div>
-      )}
-
-      {/* Loading Indicator */}
-      {isLoading && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-          <div className="flex items-center space-x-2">
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-            <span className="text-blue-800">Loading your files...</span>
-          </div>
-        </div>
-      )}
-
-      {isUploading && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-          <div className="flex items-center space-x-2">
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-            <span className="text-blue-800">Uploading files...</span>
-          </div>
-        </div>
-      )}
-
-      {/* Document Upload Section */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-800 mb-6">Upload Documents</h3>
-        
-        {fileTypes.map(fileType => {
-          const Icon = fileType.type === 'resume' ? FileText : 
-                      fileType.type === 'writing' ? BookOpen : Briefcase;
-          
-          return (
-            <div key={fileType.type} className="mb-8 last:mb-0">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center space-x-3">
-                  <Icon className="w-6 h-6 text-blue-600" />
-                  <div>
-                    <h4 className="font-semibold text-gray-800">{fileType.label}</h4>
-                    <p className="text-sm text-gray-600">{fileType.description}</p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      Max size: {fileType.maxSize / (1024 * 1024)}MB • Accepted: {fileType.accept}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Drag & Drop Upload Area - Always show when no files OR show compact version when files exist */}
-              {getFilesByType(fileType.type).length === 0 ? (
-                <div className="mb-4">
-                  <DragDropUpload
-                    fileType={fileType.type}
-                    onUpload={handleFileUpload}
-                    isUploading={isUploading}
-                    accept={fileType.accept}
-                    maxSize={fileType.maxSize}
-                  />
-                </div>
-              ) : (
-                <div className="mb-4">
-                  <DragDropUpload
-                    fileType={fileType.type}
-                    onUpload={handleFileUpload}
-                    isUploading={isUploading}
-                    accept={fileType.accept}
-                    maxSize={fileType.maxSize}
-                    compact={true}
-                  />
-                </div>
-              )}
-
-              {/* Uploaded Files List */}
-              <div className="space-y-2">
-                {getFilesByType(fileType.type).map(file => (
-                  <div key={file.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div className="flex items-center space-x-3">
-                      <FileImage className="w-5 h-5 text-gray-400" />
-                      <div>
-                        <p className="font-medium text-gray-800">{file.name}</p>
-                        <p className="text-sm text-gray-600">Uploaded {file.uploadDate} • {file.size}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <button className="p-2 text-gray-400 hover:text-blue-600">
-                        <Edit className="w-4 h-4" />
-                      </button>
-                      <button 
-                        onClick={() => removeFile(file.id)}
-                        className="p-2 text-gray-400 hover:text-red-600"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-
-
-
-
-
-    </div>
+    <EnhancedProfileBuilder user={user} />
   );
 
   const renderGenerateResume = () => (
@@ -591,28 +819,181 @@ ${analysis.keyRequirements.includes('Regulatory Compliance') ? '• Regulatory C
         {/* Analysis Results */}
         {analysisResults && (
           <div className="bg-blue-50 rounded-lg p-6">
-            <h3 className="font-semibold text-blue-800 mb-3">Analysis Results</h3>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span>Match Score:</span>
-                <span className="font-bold text-green-600">{analysisResults.matchScore}%</span>
+            <h3 className="font-semibold text-blue-800 mb-4">Job Analysis Results</h3>
+            
+            {/* Match Score */}
+            <div className="mb-4">
+              <div className="flex justify-between items-center mb-2">
+                <span className="font-medium">Match Score:</span>
+                <span className="font-bold text-lg text-green-600">{analysisResults.matchScore}%</span>
               </div>
-              <div className="flex justify-between">
-                <span>Target Role:</span>
-                <span className="font-medium">{analysisResults.role}</span>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div 
+                  className="bg-green-500 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${analysisResults.matchScore}%` }}
+                ></div>
               </div>
-              <div className="flex justify-between">
-                <span>Industry:</span>
-                <span className="font-medium">{analysisResults.industry}</span>
+            </div>
+
+            {/* Basic Info */}
+            <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
+              <div>
+                <span className="font-medium">Target Role:</span>
+                <p className="text-gray-700">{analysisResults.role}</p>
               </div>
-              <div className="mt-3">
-                <span className="font-medium">Key Requirements:</span>
-                <ul className="mt-1 list-disc list-inside text-gray-600">
-                  {analysisResults.keyRequirements.map((req, index) => (
-                    <li key={index}>{req}</li>
+              <div>
+                <span className="font-medium">Industry:</span>
+                <p className="text-gray-700">{analysisResults.industry}</p>
+              </div>
+            </div>
+
+            {/* Skills Analysis */}
+            <div className="space-y-4">
+              {/* Required Skills */}
+              <div>
+                <h4 className="font-semibold text-blue-700 mb-2">Required Skills</h4>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  {Object.entries(analysisResults.requiredSkills).map(([category, skills]) => (
+                    skills.length > 0 && (
+                      <div key={category}>
+                        <span className="font-medium text-gray-700 capitalize">{category}:</span>
+                        <ul className="mt-1 list-disc list-inside text-gray-600">
+                          {skills.map((skill, index) => (
+                            <li key={index}>{skill}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )
                   ))}
-                </ul>
+                </div>
               </div>
+
+              {/* Skill Gaps */}
+              {Object.values(analysisResults.skillGaps).some(gaps => gaps.length > 0) && (
+                <div>
+                  <h4 className="font-semibold text-orange-700 mb-2">Skill Gaps</h4>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    {Object.entries(analysisResults.skillGaps).map(([category, gaps]) => (
+                      gaps.length > 0 && (
+                        <div key={category}>
+                          <span className="font-medium text-gray-700 capitalize">{category}:</span>
+                          <ul className="mt-1 space-y-1">
+                            {gaps.map((gap, index) => (
+                              <li key={index} className="flex items-center justify-between group">
+                                <span className="text-orange-600">{gap}</span>
+                                <button
+                                  onClick={() => toggleSkill(category, gap)}
+                                  className="ml-2 px-2 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors opacity-0 group-hover:opacity-100"
+                                  title="Mark as acquired"
+                                >
+                                  ✓ Add
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Current Skills */}
+              <div>
+                <h4 className="font-semibold text-green-700 mb-2">Your Current Skills</h4>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  {Object.entries(skillProfile).map(([category, skills]) => (
+                    skills.length > 0 && (
+                      <div key={category}>
+                        <span className="font-medium text-gray-700 capitalize">{category}:</span>
+                        <ul className="mt-1 space-y-1">
+                          {skills.map((skill, index) => (
+                            <li key={index} className="flex items-center justify-between group">
+                              <span className="text-green-600">{skill}</span>
+                              <button
+                                onClick={() => removeSkill(category, skill)}
+                                className="ml-2 px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors opacity-0 group-hover:opacity-100"
+                                title="Remove skill"
+                              >
+                                ×
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )
+                  ))}
+                </div>
+              </div>
+
+              {/* Experience Alignment */}
+              {analysisResults.experienceAlignment.length > 0 && (
+                <div>
+                  <h4 className="font-semibold text-green-700 mb-2">Experience Alignment</h4>
+                  <ul className="text-sm list-disc list-inside text-gray-600">
+                    {analysisResults.experienceAlignment.map((exp, index) => (
+                      <li key={index}>{exp}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Relevant Experiences */}
+              {analysisResults.relevantExperiences && analysisResults.relevantExperiences.length > 0 && (
+                <div>
+                  <h4 className="font-semibold text-blue-700 mb-2">Most Relevant Experiences</h4>
+                  <div className="space-y-3">
+                    {analysisResults.relevantExperiences.slice(0, 3).map((exp, index) => (
+                      <div key={index} className="bg-white rounded-lg p-3 border border-gray-200">
+                        <div className="flex justify-between items-start mb-2">
+                          <div>
+                            <h5 className="font-medium text-gray-800">{exp.company}</h5>
+                            <p className="text-sm text-gray-600">{exp.role}</p>
+                            <p className="text-xs text-gray-500">{exp.period}</p>
+                          </div>
+                          <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">
+                            Score: {exp.relevanceScore}
+                          </span>
+                        </div>
+                        {exp.achievements && exp.achievements.length > 0 && (
+                          <div className="text-xs text-gray-600">
+                            <span className="font-medium">Key achievements:</span>
+                            <ul className="mt-1 list-disc list-inside">
+                              {exp.achievements.slice(0, 2).map((achievement, idx) => (
+                                <li key={idx} className="truncate">{achievement}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Recommendations */}
+              {analysisResults.recommendedFocus.length > 0 && (
+                <div>
+                  <h4 className="font-semibold text-purple-700 mb-2">Resume Focus Areas</h4>
+                  <ul className="text-sm list-disc list-inside text-gray-600">
+                    {analysisResults.recommendedFocus.map((rec, index) => (
+                      <li key={index}>{rec}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Improvement Areas */}
+              {analysisResults.improvementAreas.length > 0 && (
+                <div>
+                  <h4 className="font-semibold text-blue-700 mb-2">Development Opportunities</h4>
+                  <ul className="text-sm list-disc list-inside text-gray-600">
+                    {analysisResults.improvementAreas.map((area, index) => (
+                      <li key={index}>{area}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           </div>
         )}

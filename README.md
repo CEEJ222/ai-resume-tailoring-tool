@@ -1,6 +1,23 @@
 # AI Resume Tailoring Tool
 
-An intelligent web application that automatically tailors resumes to match job descriptions using AI-powered analysis and content optimization.
+An intelligent web application that automatically tailors resumes to match job descriptions using AI-powered analysis and content optimization. Features an enhanced profile builder with automatic skill extraction and experience merging.
+
+## 🚀 New Features
+
+### Enhanced Profile Builder
+- **Single File Upload**: Upload any career document (resumes, cover letters, writing samples)
+- **Auto-Detection**: System automatically detects file types based on content and filename
+- **Smart Skill Extraction**: Automatically identifies skills from document content
+- **Experience Merging**: Intelligently merges overlapping job experiences from multiple documents
+- **Evidence-Based Skills**: Add skills with specific evidence and impact metrics
+- **Easy Management**: Remove skills and experiences with simple UI controls
+
+### Key Capabilities
+- **Document Analysis**: Extracts skills, experiences, and achievements from uploaded files
+- **Smart Merging**: Combines duplicate experiences and removes redundant information
+- **Skill Gap Analysis**: Identifies missing skills for job applications
+- **Evidence Tracking**: Maintains proof of skills with specific examples
+- **Profile Growth**: Builds comprehensive career profile from multiple documents
 
 ## 🚀 Features
 
@@ -25,10 +42,24 @@ An intelligent web application that automatically tailors resumes to match job d
 ## 🛠 Technologies
 
 - **Frontend**: React 18, Lucide React Icons
-- **Styling**: CSS3 with responsive design
-- **State Management**: React Hooks (useState)
+- **Styling**: Tailwind CSS with responsive design
+- **State Management**: React Hooks (useState, useEffect)
+- **Backend**: Supabase (PostgreSQL, Storage, Auth)
 - **File Handling**: JavaScript FileReader API
-- **Deployment**: GitHub Pages ready
+- **Deployment**: Vercel ready
+
+## 🏗️ Technical Implementation
+
+### Database Schema
+- **Enhanced Files Table**: Stores document metadata, extracted content, and identified skills
+- **Experiences Table**: Manages job experiences with achievements and skill evidence
+- **Skill Profiles Table**: Tracks user skills across categories
+
+### AI-Powered Features
+- **Content Extraction**: Parses document text to identify skills and experiences
+- **Smart Classification**: Auto-detects document types (resume, cover letter, etc.)
+- **Experience Parsing**: Extracts company, role, period, and achievements
+- **Skill Mapping**: Maps extracted content to standardized skill categories
 
 ## 📦 Installation
 
